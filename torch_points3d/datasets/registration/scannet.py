@@ -203,9 +203,43 @@ class ScannetRegistration(Scannet, GeneralFragment):
     segmentations.
 
     Applied to registration.
+
+    Args:
+        root (string): 
+            The root directory where the dataset should be saved.
+        frame_skip (int, optional):
+            The number of frames between each RGB-D scan sampled from the raw ScanNet
+            videos. Defaults to 25.
+        split (str, optional):
+            The dataset split used(train, val or test). Defaults to "train".
+        transform (callable, optional): 
+            A function/transform that takes in an :obj:`torch_geometric.data.Data`
+            object and returns a transformed version. The data object will be
+            transformed before every access. Defaults to None.
+        pre_transform (callable, optional): 
+            A function/transform that takes in an :obj:`torch_geometric.data.Data`.
+            object and returns a transformed version. The data object will be
+            transformed before being saved to disk. Defaults to None.
+        pre_filter (callable, optional): 
+            A function that takes an :obj:`torch_geometric.data.Data` object and
+            returns a boolean value, indicating whether the data object should be
+            included in the final dataset. Defaults to None.
+        version (str, optional): 
+            The version of ScanNet. Defaults to "v1".
+        max_num_point (int, optional): 
+            The maximum number of points to keep during the preprocessing step. 
+            Defaults to None.
+        process_workers (int, optional): 
+            The number of workers for processing. Defaults to 4.
+        types (list, optional): 
+            The types of data to use get from the ScanNet dataset. 
+            Defaults to [".sens"].
+        is_test (bool, optional): [description]. Defaults to False.
     """
+    
     def __init__(self,
                  root,
+                 frame_skip=25,
                  split="train",
                  transform=None,
                  pre_transform=None,
@@ -214,7 +248,6 @@ class ScannetRegistration(Scannet, GeneralFragment):
                  max_num_point=None,
                  process_workers=4,
                  types=[".sens"],
-                 normalize_rgb=True,
                  is_test=False):
         Scannet.__init__(self,
                            root,
@@ -228,6 +261,7 @@ class ScannetRegistration(Scannet, GeneralFragment):
                            types,
                            normalize_rgb,
                            is_test)
+        self.frame_skip = frame_skip
 
     def get_raw_pair(self, idx):
         data_source_o = self.get_raw_data(idx)
@@ -243,20 +277,14 @@ class ScannetRegistration(Scannet, GeneralFragment):
     @staticmethod
     def read_one_scan(scannet_dir,
                       scan_name,
-                      label_map_file,
-                      donotcare_class_ids,
                       max_num_points,
-                      obj_class_ids,
                       normalize_rgb):
         """Reads a scan from downloaded files and stores it in an object.
 
         Args:
             scannet_dir (str): A path to the folder containing the raw scan data
             scan_name (str): The name of the scan
-            label_map_file (str): An optional file with a mapping between label sets
-            donotcare_class_ids (list): An optional set of classes to filter out of the scan
             max_num_points (int): The maximum number of points sampled from the scan
-            obj_class_ids (list): A list of object class labels
             normalize_rgb (bool): Normalize RGB values
 
         Returns:
@@ -264,7 +292,15 @@ class ScannetRegistration(Scannet, GeneralFragment):
         """
         sens_filename = osp.join(scannet_dir, scan_name, scan_name + ".sens")
         sens_data = SensorData(sens_filename)
+        # TODO: Add output_path
+        sens_data.export_depth_images(frame_skip=self.frame_skip)
+        # TODO: Save to new frames_dir
         return
+
+    # TODO
+    @property
+    def processed_file_names(self):
+        pass
 
     def process(self):
         super().process()
