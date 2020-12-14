@@ -23,7 +23,8 @@ import os, struct
 import numpy as np
 import zlib
 import imageio
-import cv2
+
+from PIL import Image
 
 COMPRESSION_TYPE_COLOR = {-1:'unknown', 0:'raw', 1:'png', 2:'jpeg'}
 COMPRESSION_TYPE_DEPTH = {-1:'unknown', 0:'raw_ushort', 1:'zlib_ushort', 2:'occi_ushort'}
@@ -102,7 +103,7 @@ class SensorData:
       depth_data = self.frames[f].decompress_depth(self.depth_compression_type)
       depth = np.fromstring(depth_data, dtype=np.uint16).reshape(self.depth_height, self.depth_width)
       if image_size is not None:
-        depth = cv2.resize(depth, (image_size[1], image_size[0]), interpolation=cv2.INTER_NEAREST)
+        depth = depth.resize((image_size[1], image_size[0]), Image.NEAREST)
       imageio.imwrite(os.path.join(output_path, str(f) + '.png'), depth)
 
 
@@ -113,7 +114,7 @@ class SensorData:
     for f in range(0, len(self.frames), frame_skip):
       color = self.frames[f].decompress_color(self.color_compression_type)
       if image_size is not None:
-        color = cv2.resize(color, (image_size[1], image_size[0]), interpolation=cv2.INTER_NEAREST)
+        color = color.resize((image_size[1], image_size[0]), Image.NEAREST)
       imageio.imwrite(os.path.join(output_path, str(f) + '.jpg'), color)
 
 
