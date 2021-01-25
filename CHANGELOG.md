@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Bug fixes
+- Fix bug in data loader https://github.com/nicolas-chaulet/torch-points3d/issues/443 thanks @JloveU
+- Fix bug in base unet that created problems when loading pointnet++ model checkpoint
+
+## 1.2.0
+
 ### Added
 
 - Support for the IRALab benchmark (https://arxiv.org/abs/2003.12841), with data from the ETH, Canadian Planetary, Kaist and TUM datasets. (thanks @simone-fontana)
