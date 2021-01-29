@@ -79,16 +79,6 @@ class ScannetRegistration(Scannet, GeneralFragment):
         Scannet.__init__(self, root, split, transform, pre_transform, pre_filter, 
                          version, max_num_point, process_workers, types, is_test)
         self.frame_skip = frame_skip
-        assert version == "v1", "The version should be v1"
-        assert split == "train", "The data split should be `train`"
-        self.version = version
-        self.max_num_point = max_num_point
-        self.use_multiprocessing = process_workers > 1
-        self.process_workers = process_workers
-        self.is_test = is_test
-        super().__init__(root, transform, pre_transform, pre_filter)
-        path = self.processed_paths[0]
-        self.data, self.slices = torch.load(path)
 
     def get_raw_pair(self, idx):
         data_source_o = self.get_raw_data(idx)
@@ -102,7 +92,7 @@ class ScannetRegistration(Scannet, GeneralFragment):
         return res
 
     @staticmethod
-    def read_one_scan(scannet_dir, scan_name):
+    def _read_raw_scan(scene):
         """Reads a scan from downloaded .sens files and exports RGB-D frames, camera
         intrinsics, and poses.
 
@@ -110,23 +100,23 @@ class ScannetRegistration(Scannet, GeneralFragment):
             scannet_dir (str): A path to the folder containing the raw scan data
             scan_name (str): The name of the scan
         """
-        sens_filename = osp.join(scannet_dir, scan_name, scan_name + ".sens")
-        output_path = osp.join(scannet_dir, scan_name)
+        sens_filename = osp.join(scene, scene + ".sens")
         # Read raw .sens file and export RGB-D images, poses and intrinsics
-        paths = {x: osp.join(output_path, x) for x in ['depth', 'pose', 'intrinsic']}
+        paths = {x: osp.join(scene, x) for x in ['depth', 'pose', 'intrinsic']}
         sd = SensorData(sens_filename)
         sd.export_depth_images(paths['depth'], frame_skip=self.frame_skip)
         sd.export_poses(paths['pose'], frame_skip=self.frame_skip)
         sd.export_intrinsics(paths['intrinsic'])
-
-    @staticmethod
-    def process_func(id_scan, total, scannet_dir, scan_name):
-        ScannetRegistration.read_one_scan(scannet_dir, scan_name)
-        log.info("{}/{}| scan_name: {}".format(id_scan, total, scan_name))
-
-    # TODO
-    def process(self):
-        pass
+    
+    def process_raw_scans(self):
+        scannet_dir = osp.join(self.raw_dir, "scans")
+        scenes = [ osp.join(scannet_dir, scene) for scene in os.listdir(scannet_dir)]
+        if self.use_multiprocessing:
+            with multiprocessing.get_context("spawn").Pool(processes=self.process_workers) as pool:
+                pool.map(self._read_raw_scan, scenes)
+        else:
+            for scene in scenes:
+                self._read_raw_scan(scene)
 
     # TODO: Get Point clouds from RGB-D images
     # file_paths = {x: [osp.join(paths[x], f) for f in os.listdir(paths[x])]
@@ -142,10 +132,5 @@ class ScannetRegistration(Scannet, GeneralFragment):
     #     rgbd2fragment_fine(image, path_intrinsic, pose, path_fragment, num_frame_per_fragment=1)
     # TODO: Get overlapping point cloud pair
       
-    # TODO
-    @property
-    def processed_file_names(self):
-        pass
-
     def download(self):
         super().download()
