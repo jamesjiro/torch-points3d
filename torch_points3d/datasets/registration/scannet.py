@@ -92,7 +92,7 @@ class ScannetRegistration(Scannet, GeneralFragment):
         return res
 
     @staticmethod
-    def _read_raw_scan(scene):
+    def _read_raw_scan(scene, frame_skip):
         """Reads a scan from downloaded .sens files and exports RGB-D frames, camera
         intrinsics, and poses.
 
@@ -104,19 +104,20 @@ class ScannetRegistration(Scannet, GeneralFragment):
         # Read raw .sens file and export RGB-D images, poses and intrinsics
         paths = {x: osp.join(scene, x) for x in ['depth', 'pose', 'intrinsic']}
         sd = SensorData(sens_filename)
-        sd.export_depth_images(paths['depth'], frame_skip=self.frame_skip)
-        sd.export_poses(paths['pose'], frame_skip=self.frame_skip)
+        sd.export_depth_images(paths['depth'], frame_skip)
+        sd.export_poses(paths['pose'], frame_skip)
         sd.export_intrinsics(paths['intrinsic'])
     
     def process_raw_scans(self):
         scannet_dir = osp.join(self.raw_dir, "scans")
-        scenes = [ osp.join(scannet_dir, scene) for scene in os.listdir(scannet_dir)]
+        scenes = [osp.join(scannet_dir, scene) for scene in os.listdir(scannet_dir)]
+        args = [(scene, self.frame_skip) for scene in scenes]
         if self.use_multiprocessing:
             with multiprocessing.get_context("spawn").Pool(processes=self.process_workers) as pool:
-                pool.map(self._read_raw_scan, scenes)
+                pool.starmap(self._read_raw_scan, args)
         else:
-            for scene in scenes:
-                self._read_raw_scan(scene)
+            for arg in args:
+                self._read_raw_scan(*arg)
 
     # TODO: Get Point clouds from RGB-D images
     # file_paths = {x: [osp.join(paths[x], f) for f in os.listdir(paths[x])]
