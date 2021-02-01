@@ -71,6 +71,11 @@ class SensorData:
 
 
   def load(self, filename):
+    """Loads RGB-D frames into a list from sensor data.
+
+    Args:
+        filename (strin): Path to `.sens` file.
+    """
     with open(filename, 'rb') as f:
       version = struct.unpack('I', f.read(4))[0]
       assert self.version == version
@@ -95,44 +100,89 @@ class SensorData:
         self.frames.append(frame)
 
 
-  def export_depth_images(self, output_path, image_size=None, frame_skip=1):
+  def export_depth_images(self, output_path, image_size=None, frame_skip=1, num_fuse=1):
+    """Exports depth images from sensor data.
+
+    Args:
+        output_path (strin): Path to export images to.
+        image_size ([int, int], optional): Size of the images to be exported.
+          Defaults to None.
+        frame_skip (int, optional): Interval of frames between each export. 
+          Defaults to 1.
+        num_fuse (int, optional): Number of contiguous images exported every 
+          `frame_skip` frames. Defaults to 1.
+    """
     if not os.path.exists(output_path):
       os.makedirs(output_path)
     print(f'exporting {len(self.frames)//frame_skip} depth frames to {output_path}')
-    for f in range(0, len(self.frames), frame_skip):
-      depth_data = self.frames[f].decompress_depth(self.depth_compression_type)
-      depth = np.fromstring(depth_data, dtype=np.uint16).reshape(self.depth_height, self.depth_width)
-      if image_size is not None:
-        depth = depth.resize((image_size[1], image_size[0]), Image.NEAREST)
-      imageio.imwrite(os.path.join(output_path, str(f) + '.png'), depth)
+    for idx in range(0, len(self.frames), frame_skip):
+      for frame in self.frames[idx:num_fuse]: 
+        depth_data = frame.decompress_depth(self.depth_compression_type)
+        depth = np.fromstring(depth_data, dtype=np.uint16).reshape(self.depth_height, self.depth_width)
+        if image_size is not None:
+          depth = depth.resize((image_size[1], image_size[0]), Image.NEAREST)
+        imageio.imwrite(os.path.join(output_path, str(idx) + '.png'), depth)
 
 
-  def export_color_images(self, output_path, image_size=None, frame_skip=1):
+  def export_color_images(self, output_path, image_size=None, frame_skip=1, num_fuse=1):
+    """Exports RGB-D frames from sensor data.
+
+    Args:
+        output_path (string): Path to export images to.
+        image_size ([int, int], optional): Size of the images being exported. 
+          Defaults to None.
+        frame_skip (int, optional): Interval of frames between each export. 
+          Defaults to 1.
+        num_fuse (int, optional): Number of contiguous images exported every 
+          `frame_skip` frames. Defaults to 1.
+    """
     if not os.path.exists(output_path):
       os.makedirs(output_path)
     print(f'exporting {len(self.frames)//frame_skip} color frames to {output_path}')
-    for f in range(0, len(self.frames), frame_skip):
-      color = self.frames[f].decompress_color(self.color_compression_type)
-      if image_size is not None:
-        color = color.resize((image_size[1], image_size[0]), Image.NEAREST)
-      imageio.imwrite(os.path.join(output_path, str(f) + '.jpg'), color)
+    for idx in range(0, len(self.frames), frame_skip):
+      for frame in self.frames[idx:num_fuse]: 
+        color = frame.decompress_color(self.color_compression_type)
+        if image_size is not None:
+          color = color.resize((image_size[1], image_size[0]), Image.NEAREST)
+        imageio.imwrite(os.path.join(output_path, str(idx) + '.jpg'), color)
 
 
   def save_mat_to_file(self, matrix, filename):
+    """Save matrix as a `.txt` file.
+
+    Args:
+        matrix (ndarray): Array to be exported.
+        filename (string): File to be written.
+    """
     with open(filename, 'w') as f:
       for line in matrix:
         np.savetxt(f, line[np.newaxis], fmt='%f')
 
 
-  def export_poses(self, output_path, frame_skip=1):
+  def export_poses(self, output_path, frame_skip=1, num_fuse=1):
+    """Exports camera extrinics for each frame from sensor data.
+
+    Args:
+        output_path (string): Path to export poses to.
+        frame_skip (int, optional): Interval of frames between each export. 
+          Defaults to 1.
+        num_fuse (int, optional): Number of contiguous poses exported every
+          `frame_skip` frames. Defaults to 1.
+    """
     if not os.path.exists(output_path):
       os.makedirs(output_path)
     print(f'exporting {len(self.frames)//frame_skip} camera poses to {output_path}')
-    for f in range(0, len(self.frames), frame_skip):
-      self.save_mat_to_file(self.frames[f].camera_to_world, os.path.join(output_path, str(f) + '.txt'))
+    for idx in range(0, len(self.frames), frame_skip):
+      for frame in self.frames[idx:num_fuse]:
+        self.save_mat_to_file(frame.camera_to_world, os.path.join(output_path, str(idx) + '.txt'))
 
 
   def export_intrinsics(self, output_path):
+    """Exports camera intrinsics from sensor data.
+
+    Args:
+        output_path (string): Path to export intrinsics to.
+    """
     if not os.path.exists(output_path):
       os.makedirs(output_path)
     print(f'exporting camera intrinsics to {output_path}')
