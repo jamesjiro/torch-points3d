@@ -67,6 +67,7 @@ class ScannetRegistration(Scannet, GeneralFragment):
     def __init__(self,
                  root,
                  frame_skip=25,
+                 num_fuse=1,
                  split="train",
                  transform=None,
                  pre_transform=None,
@@ -78,7 +79,11 @@ class ScannetRegistration(Scannet, GeneralFragment):
                  is_test=False):
         Scannet.__init__(self, root, split, transform, pre_transform, pre_filter, 
                          version, max_num_point, process_workers, types, is_test)
+        scannet_dir = osp.join(self.raw_dir, "scans")
+        scene_paths = [osp.join(scannet_dir, scene) for scene in os.listdir(scannet_dir)]
+        self.scene_paths = scene_paths        
         self.frame_skip = frame_skip
+        self.num_fuse = num_fuse
 
     def get_raw_pair(self, idx):
         data_source_o = self.get_raw_data(idx)
@@ -92,32 +97,50 @@ class ScannetRegistration(Scannet, GeneralFragment):
         return res
 
     @staticmethod
-    def _read_raw_scan(scene, frame_skip):
-        """Reads a scan from downloaded .sens files and exports RGB-D frames, camera
-        intrinsics, and poses.
+    def _read_raw_scan(scene, frame_skip, num_fuse):
+        """Reads a scan from downloaded .sens files and exports `num_fuse` contiguous 
+        RGB-D frames, camera intrinsics, and poses every `frame_skip` frames.
 
         Args:
             scannet_dir (str): A path to the folder containing the raw scan data
             scan_name (str): The name of the scan
         """
         sens_filename = osp.join(scene, scene + ".sens")
-        # Read raw .sens file and export RGB-D images, poses and intrinsics
         paths = {x: osp.join(scene, x) for x in ['depth', 'pose', 'intrinsic']}
         sd = SensorData(sens_filename)
-        sd.export_depth_images(paths['depth'], frame_skip)
-        sd.export_poses(paths['pose'], frame_skip)
+        sd.export_depth_images(paths['depth'], frame_skip, num_fuse)
+        sd.export_poses(paths['pose'], frame_skip, num_fuse)
         sd.export_intrinsics(paths['intrinsic'])
     
     def process_raw_scans(self):
-        scannet_dir = osp.join(self.raw_dir, "scans")
-        scenes = [osp.join(scannet_dir, scene) for scene in os.listdir(scannet_dir)]
-        args = [(scene, self.frame_skip) for scene in scenes]
+        """Processes raw scans and exports images, camera intrinsics, and camera poses
+        for each scene in ScanNet.
+        """
+        args = [(scene, self.frame_skip) for scene in self.scene_paths]
         if self.use_multiprocessing:
             with multiprocessing.get_context("spawn").Pool(processes=self.process_workers) as pool:
                 pool.starmap(self._read_raw_scan, args)
         else:
             for arg in args:
                 self._read_raw_scan(*arg)
+
+    def fuse_frames(self):
+        num_fuse = self.num_fuse
+        for path in self.scene_paths:
+            frag = osp.join(path, 'fragment')
+            depth = osp.join(path, 'depth')
+            pose = osp.join(path, 'pose')
+            path_intrinsic = osp.join(path, 'intrinsic')
+            num_frames = len(os.listdir(depth))
+            for idx in range(num_frames):
+                stop = num_fuse if idx + num_fuse <= num_frames else num_frames
+                list_paths = [ 
+                    (osp.join(depth, "{}.png".format(f)),
+                     osp.join(pose, "{}.txt".format(f)))
+                    for f in range(idx, stop)
+                ]
+                rgbd2fragment_fine(list_paths[0], path_intrinsic, list_paths[1],
+                                   frag, num_frame_per_fragment=num_fuse)
 
     # TODO: Get Point clouds from RGB-D images
     # file_paths = {x: [osp.join(paths[x], f) for f in os.listdir(paths[x])]
