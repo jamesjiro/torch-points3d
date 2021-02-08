@@ -115,8 +115,11 @@ class SensorData:
     if not os.path.exists(output_path):
       os.makedirs(output_path)
     print(f'exporting {len(self.frames)//frame_skip} depth frames to {output_path}')
-    for idx in range(0, len(self.frames), frame_skip):
-      for frame in self.frames[idx:num_fuse]: 
+    num_frames = len(self.frames)
+    for idx in range(0, num_frames, frame_skip):
+      stop = (num_fuse if idx + num_fuse <= num_frames 
+              else num_frames)
+      for frame in self.frames[idx:stop]: 
         depth_data = frame.decompress_depth(self.depth_compression_type)
         depth = np.fromstring(depth_data, dtype=np.uint16).reshape(self.depth_height, self.depth_width)
         if image_size is not None:
@@ -139,8 +142,11 @@ class SensorData:
     if not os.path.exists(output_path):
       os.makedirs(output_path)
     print(f'exporting {len(self.frames)//frame_skip} color frames to {output_path}')
-    for idx in range(0, len(self.frames), frame_skip):
-      for frame in self.frames[idx:num_fuse]: 
+    num_frames = len(self.frames)
+    for idx in range(0, num_frames, frame_skip):
+      stop = (num_fuse if idx + num_fuse <= num_frames 
+              else num_frames)
+      for frame in self.frames[idx:stop]: 
         color = frame.decompress_color(self.color_compression_type)
         if image_size is not None:
           color = color.resize((image_size[1], image_size[0]), Image.NEAREST)
@@ -172,8 +178,11 @@ class SensorData:
     if not os.path.exists(output_path):
       os.makedirs(output_path)
     print(f'exporting {len(self.frames)//frame_skip} camera poses to {output_path}')
-    for idx in range(0, len(self.frames), frame_skip):
-      for frame in self.frames[idx:num_fuse]:
+    num_frames = len(self.frames)
+    for idx in range(0, num_frames, frame_skip):
+      stop = (num_fuse if idx + num_fuse <= num_frames 
+              else num_frames)
+      for frame in self.frames[idx:stop]:
         self.save_mat_to_file(frame.camera_to_world, os.path.join(output_path, str(idx) + '.txt'))
 
 
