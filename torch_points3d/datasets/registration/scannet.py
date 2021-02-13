@@ -143,16 +143,23 @@ class ScannetRegistration(Scannet, GeneralFragment):
         makedirs(raw_pair_path)
         for scene_path in os.listdir(osp.join(self.processed_dir, 'fragment')):
             num_fragments = len(os.listdir(scene_path))
+            log.info("{}, num_fragments: {}".format(scene_path, num_fragments))
             idx = 0
+            num_pairs = 0
             while (idx < num_fragments - 1):
-                frag1 = "fragment_{:06d}.pt".format(idx)
-                frag2 = "fragment_{:06d}.pt".format(idx+1)
+                out_path = osp.join(raw_pair_path, 'pair{:06}.npy'.format(idx))
+                path1 = "fragment_{:06d}.pt".format(idx)
+                path2 = "fragment_{:06d}.pt".format(idx+1)
+                data1 = torch.load(path1)
+                data2 = torch.load(path2)
+                match = compute_overlap_and_matches(
+                    data1, data2, self.max_distance_overlap)
                 # TODO: compute overlap between fragment idx and idx + 1
                 # If overlap >= 0.3 then raw_pair = (fragment_idx, fragment_idx+1)
                 # else idx = idx + 1
-                output = compute_overlap_and_matches(
-                    frag1, frag2, self.max_distance_overlap)
-                # TODO: get pair and overlap from output
+                output = compute_overlap_and_matches(frag1, frag2, 
+                                                     self.max_distance_overlap)
+                if output['overlap'] >= 0.3:
 
     def get_raw_pair(self, idx):
         data_source_o = self.get_raw_data(idx)
