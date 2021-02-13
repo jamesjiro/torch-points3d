@@ -74,6 +74,7 @@ class ScannetRegistration(Scannet, GeneralFragment):
                  tsdf_voxel_size=0.01,
                  limit_size=600,
                  depth_thresh=6,
+                 max_distance_overlap=0.05,
                  split="train",
                  transform=None,
                  pre_transform=None,
@@ -89,6 +90,7 @@ class ScannetRegistration(Scannet, GeneralFragment):
         self.tsdf_voxel_size = tsdf_voxel_size
         self.limit_size = limit_size
         self.depth_thresh = depth_thresh
+        self.max_distance_overlap = max_distance_overlap
     
     @property
     def raw_file_names(self):
@@ -143,11 +145,14 @@ class ScannetRegistration(Scannet, GeneralFragment):
             num_fragments = len(os.listdir(scene_path))
             idx = 0
             while (idx < num_fragments - 1):
-                frag_fst = "fragment_{:06d}.pt".format(idx)
-                frag_snd = "fragment_{:06d}.pt".format(idx+1)
+                frag1 = "fragment_{:06d}.pt".format(idx)
+                frag2 = "fragment_{:06d}.pt".format(idx+1)
                 # TODO: compute overlap between fragment idx and idx + 1
                 # If overlap >= 0.3 then raw_pair = (fragment_idx, fragment_idx+1)
                 # else idx = idx + 1
+                output = compute_overlap_and_matches(
+                    frag1, frag2, self.max_distance_overlap)
+                # TODO: get pair and overlap from output
 
     def get_raw_pair(self, idx):
         data_source_o = self.get_raw_data(idx)
