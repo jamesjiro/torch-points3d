@@ -75,6 +75,8 @@ class ScannetRegistration(Scannet, GeneralFragment):
                  limit_size=600,
                  depth_thresh=6,
                  max_distance_overlap=0.05,
+                 min_overlap_ratio=0.3,
+                 self_supervised=False,
                  split="train",
                  transform=None,
                  pre_transform=None,
@@ -90,7 +92,9 @@ class ScannetRegistration(Scannet, GeneralFragment):
         self.tsdf_voxel_size = tsdf_voxel_size
         self.limit_size = limit_size
         self.depth_thresh = depth_thresh
-        self.max_distance_overlap = max_distance_overlap
+        self.max_dist_overlap = max_distance_overlap
+        self.min_overlap_ratio = min_overlap_ratio
+        self.self_supervised = self_supervised
     
     @property
     def raw_file_names(self):
@@ -102,10 +106,13 @@ class ScannetRegistration(Scannet, GeneralFragment):
     
     def _create_fragment(self):
         fragment_path = osp.join(self.processed_dir, 'fragment')
+
         if files_exist(fragment_path):
             log.warning("Raw fragments already exist")
             return
+
         makedirs(fragment_path)
+
         for scene_path in os.listdir(osp.join(self.raw_dir, "scans")):
             depth = osp.join(scene_path, 'depth')
             pose = osp.join(scene_path, 'pose')
@@ -118,6 +125,7 @@ class ScannetRegistration(Scannet, GeneralFragment):
                           "camera poses.".format(scene_path))
             out_path = osp.join(fragment_path, scene_path)
             makedirs(out_path)
+
             for idx in range(0, num_frames, self.num_frame_per_fragment):
                 stop = (self.num_frame_per_fragment 
                         if idx + self.num_frame_per_fragment <= num_frames 
@@ -137,40 +145,36 @@ class ScannetRegistration(Scannet, GeneralFragment):
 
     def _compute_fragment_pairs(self):
         raw_pair_path = osp.join(self.processed_dir, 'pair_overlap')
+
         if files_exist(raw_pair_path):
             log.warning("Pair overlap already computed")
             return
+
         makedirs(raw_pair_path)
+
         for scene_path in os.listdir(osp.join(self.processed_dir, 'fragment')):
             num_fragments = len(os.listdir(scene_path))
             log.info("{}, num_fragments: {}".format(scene_path, num_fragments))
-            idx = 0
-            num_pairs = 0
-            while (idx < num_fragments - 1):
-                out_path = osp.join(raw_pair_path, 'pair{:06}.npy'.format(idx))
-                path1 = "fragment_{:06d}.pt".format(idx)
-                path2 = "fragment_{:06d}.pt".format(idx+1)
+            frag_idx = 0
+            pair_idx = 0
+
+            while (frag_idx < num_fragments - 1):
+                out_path = osp.join(raw_pair_path, 'pair{:06}.npy'.format(pair_idx))
+                path1 = "fragment_{:06d}.pt".format(frag_idx)
+                path2 = "fragment_{:06d}.pt".format(frag_idx+1)
                 data1 = torch.load(path1)
                 data2 = torch.load(path2)
                 match = compute_overlap_and_matches(
-                    data1, data2, self.max_distance_overlap)
-                # TODO: compute overlap between fragment idx and idx + 1
-                # If overlap >= 0.3 then raw_pair = (fragment_idx, fragment_idx+1)
-                # else idx = idx + 1
-                output = compute_overlap_and_matches(frag1, frag2, 
-                                                     self.max_distance_overlap)
-                if output['overlap'] >= 0.3:
+                    data1, data2, self.max_dist_overlap)
+                match['path_source'] = path1
+                match['path_target'] = path2
 
-    def get_raw_pair(self, idx):
-        data_source_o = self.get_raw_data(idx)
-        data_target_o = self.get_raw_data(idx)
-        data_source, data_target, new_pair = self.unsupervised_preprocess(
-            data_source_o, data_target_o)
-        return data_source, data_target, new_pair
-
-    def __getitem__(self, idx):
-        res = self.get_fragment(idx)
-        return res
+                if match['overlap'] >= self.min_overlap_ratio:
+                    np.save(out_path, match)
+                    frag_idx += 2
+                    pair_idx += 1
+                else:
+                    frag_idx += 1
 
     @staticmethod
     def _read_raw_scan(path, frame_skip, num_frame_per_fragment):
@@ -196,26 +200,20 @@ class ScannetRegistration(Scannet, GeneralFragment):
         scene_paths = [osp.join(scan_dir, scene) for scene in os.listdir(scan_dir)]
         args = [(path, self.frame_skip, self.num_frame_per_fragment) 
                 for path in scene_paths]
+
         if self.use_multiprocessing:
             with multiprocessing.get_context("spawn").Pool(processes=self.process_workers) as pool:
                 pool.starmap(self._read_raw_scan, args)
         else:
             for arg in args:
                 self._read_raw_scan(*arg)
+    
+    def process(self):
+        raise NotImplementedError("Implement process method")
 
-    # TODO: Get Point clouds from RGB-D images
-    # file_paths = {x: [osp.join(paths[x], f) for f in os.listdir(paths[x])]
-    #               for x in ['depth', 'pose']}
-    # path_intrinsic = osp.join(paths['intrinsic'], 'intrinsic_depth.txt')
-    # path_fragment = osp.join(output_path, 'fragment')
+    def __getitem__(self, idx):
+        res = self.get_fragment(idx)
+        return res
 
-    # os.makedirs(path_fragment)
-    # # Fuse RGB-D frames with TSDF volume and save point cloud fragement
-    # for i in range(len(file_paths)):
-    #     image = file_paths['depth'][i : i + 1]
-    #     pose = file_paths['pose'][i : i + 1]
-    #     rgbd2fragment_fine(image, path_intrinsic, pose, path_fragment, num_frame_per_fragment=1)
-    # TODO: Get overlapping point cloud pair
-      
     def download(self):
         super().download()
