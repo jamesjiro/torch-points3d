@@ -105,6 +105,9 @@ class ScannetRegistration(Scannet, GeneralFragment):
         return ["raw_fragment", "fragment", "pair_overlap"]
     
     def _create_fragments(self):
+        """
+        Creates raw fragments from depth images and camera poses.
+        """
         out_dir = osp.join(self.processed_dir, 'raw_fragment')
 
         if files_exist(out_dir):
@@ -114,17 +117,18 @@ class ScannetRegistration(Scannet, GeneralFragment):
         makedirs(out_dir)
 
         # Iterate over each scene in the raw scans.
-        for scene_path in os.listdir(osp.join(self.raw_dir, "scans")):
-            depth = osp.join(scene_path, 'depth')
-            pose = osp.join(scene_path, 'pose')
-            path_intrinsic = osp.join(scene_path, 'intrinsic')
+        scan_path = osp.join(self.raw_dir, 'scans')
+        for scene_dir in os.listdir(scan_path):
+            depth = osp.join(scan_path, scene_dir, 'depth')
+            pose = osp.join(scan_path, scene_dir, 'pose')
+            path_intrinsic = osp.join(scan_path, scene_dir, 'intrinsic')
             num_frames = len(os.listdir(depth))
             assert num_frames == len(os.listdir(pose)), \
                 log.error("For the scene {}, "
                           "the number of depth frames "
                           "does not equal the number of " 
                           "camera poses.".format(scene_path))
-            out_path = osp.join(out_dir, scene_path)
+            out_path = osp.join(out_dir, scene_dir)
             makedirs(out_path)
             # Get indices for `num_frame_per_fragment` frames each `frame_skip`.
             frame_inds = [
@@ -153,7 +157,7 @@ class ScannetRegistration(Scannet, GeneralFragment):
     # TODO
     def _pre_transform_fragment(self):
         """
-        Apply `pre_transform` to `raw_fragments` and save to `fragments`.
+        Applies `pre_transform` to `raw_fragments` and saves to `fragments`.
         """
         out_dir = osp.join(self.processed_dir, 'fragment')
 
@@ -163,8 +167,9 @@ class ScannetRegistration(Scannet, GeneralFragment):
         
         makedirs(out_dir)
 
-        # for scene_path in os.listdir(osp.join(self.raw_dir)):
-        raise NotImplementedError("Implement process method")
+        for scene_dir in os.listdir(osp.join(self.processed_dir, 'raw_fragment')):
+            for frag in os.listdir(scene_path):
+
 
     def _compute_fragment_pairs(self):
         raw_pair_path = osp.join(self.processed_dir, 'pair_overlap')
@@ -206,8 +211,10 @@ class ScannetRegistration(Scannet, GeneralFragment):
         contiguous RGB-D frames, camera intrinsics, and poses every `frame_skip` frames.
 
         Args:
-            scannet_dir (str): A path to the folder containing the raw scan data
-            scan_name (str): The name of the scan
+            path (str): A path to the folder containing the raw scan data
+            frame_skip (int): The number of frames between each fragment.
+            num_frame_per_fragment (int): The number of frames to fuse into a 
+                fragment.
         """
         sens_filename = osp.join(path, path + ".sens")
         paths = {x: osp.join(path, x) for x in ['depth', 'pose', 'intrinsic']}
