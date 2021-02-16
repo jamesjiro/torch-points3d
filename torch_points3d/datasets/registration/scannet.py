@@ -111,7 +111,7 @@ class ScannetRegistration(Scannet, GeneralFragment):
             log.warning("Raw fragments already exist")
             return
 
-        makedirs(outdir)
+        makedirs(out_dir)
 
         # Iterate over each scene in the raw scans.
         for scene_path in os.listdir(osp.join(self.raw_dir, "scans")):
