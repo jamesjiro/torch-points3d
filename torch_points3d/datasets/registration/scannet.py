@@ -102,17 +102,18 @@ class ScannetRegistration(Scannet, GeneralFragment):
 
     @property
     def processed_file_names(self):
-        return ["fragment", "raw_pair", "pair_overlap"]
+        return ["raw_fragment", "fragment", "pair_overlap"]
     
-    def _create_fragment(self):
-        fragment_path = osp.join(self.processed_dir, 'fragment')
+    def _create_fragments(self):
+        out_dir = osp.join(self.processed_dir, 'raw_fragment')
 
-        if files_exist(fragment_path):
+        if files_exist(out_dir):
             log.warning("Raw fragments already exist")
             return
 
-        makedirs(fragment_path)
+        makedirs(outdir)
 
+        # Iterate over each scene in the raw scans.
         for scene_path in os.listdir(osp.join(self.raw_dir, "scans")):
             depth = osp.join(scene_path, 'depth')
             pose = osp.join(scene_path, 'pose')
@@ -123,25 +124,47 @@ class ScannetRegistration(Scannet, GeneralFragment):
                           "the number of depth frames "
                           "does not equal the number of " 
                           "camera poses.".format(scene_path))
-            out_path = osp.join(fragment_path, scene_path)
+            out_path = osp.join(out_dir, scene_path)
             makedirs(out_path)
+            # Get indices for `num_frame_per_fragment` frames each `frame_skip`.
+            frame_inds = [
+                base + step 
+                for base in range(0, num_frames, self.frame_skip) 
+                for step in range(self.num_frame_per_fragment 
+                                  if base + self.num_frame_per_fragment < num_frames
+                                  else num_frames - base)
+            ]
+            # Get lists of paths for frames and poses.
+            list_path_frames = [osp.join(depth, "{}.png".format(ind)) 
+                                for ind in frame_inds]
+            list_path_trans = [osp.join(pose, "{}.txt".format(ind))
+                                for ind in frame_inds]
+            # Fuse `num_frame_per_fragment` frames with camera poses and intrinsics.
+            # Save fragment for every `frame_skip` frames.
+            rgbd2fragment_fine(list_path_frames, path_intrinsic, 
+                                list_path_trans, out_path, 
+                                self.num_frame_per_fragment,
+                                self.voxel_size, 
+                                pre_transform=None,
+                                depth_thresh=self.depth_thresh,
+                                save_pc=True,
+                                limit_size=self.limit_size)
+    
+    # TODO
+    def _pre_transform_fragment(self):
+        """
+        Apply `pre_transform` to `raw_fragments` and save to `fragments`.
+        """
+        out_dir = osp.join(self.processed_dir, 'fragment')
 
-            for idx in range(0, num_frames, self.num_frame_per_fragment):
-                stop = (self.num_frame_per_fragment 
-                        if idx + self.num_frame_per_fragment <= num_frames 
-                        else num_frames)
-                list_path_frames = [osp.join(depth, "{}.png".format(frame)) 
-                                    for frame in range(idx, stop)]
-                list_path_trans = [osp.join(pose, "{}.txt".format(frame))
-                                   for frame in range(idx, stop)]
-                rgbd2fragment_fine(list_path_frames, path_intrinsic, 
-                                    list_path_trans, out_path, 
-                                    self.num_frame_per_fragment,
-                                    self.voxel_size, 
-                                    pre_transform=None,
-                                    depth_thresh=self.depth_thresh,
-                                    save_pc=True,
-                                    limit_size=self.limit_size)
+        if files_exist([out_dir]):
+            log.warning("Pre-transformed fragments already exist.")
+            return
+        
+        makedirs(out_dir)
+
+        # for scene_path in os.listdir(osp.join(self.raw_dir)):
+        raise NotImplementedError("Implement process method")
 
     def _compute_fragment_pairs(self):
         raw_pair_path = osp.join(self.processed_dir, 'pair_overlap')
@@ -155,6 +178,7 @@ class ScannetRegistration(Scannet, GeneralFragment):
         for scene_path in os.listdir(osp.join(self.processed_dir, 'fragment')):
             num_fragments = len(os.listdir(scene_path))
             log.info("{}, num_fragments: {}".format(scene_path, num_fragments))
+
             frag_idx = 0
             pair_idx = 0
 
@@ -208,9 +232,17 @@ class ScannetRegistration(Scannet, GeneralFragment):
             for arg in args:
                 self._read_raw_scan(*arg)
     
+    # TODO
     def process(self):
+        log.info("create fragments")
+        self._create_fragments()
+        log.info("apply pre_transform to fragments")
+        self._pre_transform_fragment()
+        log.info("compute pairs")
+        self._compute_fragment_pairs()
         raise NotImplementedError("Implement process method")
 
+    # TODO: check what idx is indexing
     def __getitem__(self, idx):
         res = self.get_fragment(idx)
         return res
